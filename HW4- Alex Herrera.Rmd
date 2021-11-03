@@ -1,0 +1,277 @@
+---
+title: "Homework 4"
+author: "STAT 4510/7510"
+date: "Due Tuesday, September 27, 11:59 pm"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Instructions:**  Please list your name and student number clearly.  In order to receive credit for a problem, your solution must show sufficient detail so that the grader can determine how you obtained your answer. Submit a single pdf generated using R Markdown.  All R code should be included, as well as all output produced.  Upload your work to the Canvas course site.
+
+## Problem 1
+
+In this problem, we will once again consider the data found in `iris.csv` from Homework 1. Read in the iris data and change `variety` to a factor variable.  We will investigate different classification techniques to predict the iris `variety`.
+
+```{r}
+
+iris=read.csv("iris.csv")
+#View(iris)
+summary(iris)
+
+#turn variety into a factor variable
+iris$variety=as.factor(iris$variety)
+is.factor(iris$variety)
+summary(iris)
+```
+
+(a)  Use the `pairs()` command to display a scatterplot matrix, colored by iris type. In addition, produce a correlation matrix for the quantitative variables.  Select two variables that are not highly correlated to use in your models below.  Explain the reasoning behind your selection.
+```{r}
+#scatterplot matrix, colored by iris type:
+pairs(iris, col=iris$variety)
+
+#correlation matrix for quantitative variables
+cor(iris[ , -5])
+
+#I selected sepal.width and sepal.length. These variables are the closest to a 0 correlation at -0.11. 
+```
+
+(b)  Split the data into a 50% training set and 50% test set (remember to set a seed of 1).  When defining these sets, include only the predictor variables you selected in part (a), and the response variable `variety`. 
+```{r}
+#split data 50-50 with only sepal.width, sepal.length, and variety
+set.seed(1)
+TestRows=sample(1:nrow(iris),.50*nrow(iris))
+test.iris = iris[TestRows,c(1,2,5)]
+train.iris= iris[-TestRows,c(1,2,5)]
+dim(train.iris)[1]
+dim(test.iris)[1]
+```
+
+(c)  For each of the models below, use the training data to predict `variety`.  Print a confusion matrix for the test data, comparing the true test iris variety to the predicted test set iris variety.  Calculate the test misclassification rate.
+
+     i.  KNN: Use k=5 & K=10. Remember library(class).
+     ii. LDA: Remember library(MASS).
+     iii. QDA: Remember library(MASS).
+```{r}
+#PREDICTIONS:
+#predict with KNN:
+library(class)
+knn.5.pred = knn(train.iris[,1:2],test.iris[,1:2],train.iris[,3], k=5)
+knn.10.pred = knn(train.iris[,1:2],test.iris[,1:2],train.iris[,3], k=10)
+
+knn.5.pred
+knn.10.pred
+
+#predict with LDA:
+library(MASS)
+lda.fit=lda(variety ~ sepal.length + sepal.width, data=iris)
+lda.pred=predict(lda.fit, iris)
+lda.class=lda.pred$class
+
+lda.class
+
+#predict with QDA:
+qda.fit=qda(variety ~ sepal.length + sepal.width, data=iris)
+qda.pred=predict(qda.fit,iris) 
+qda.class=qda.pred$class 
+
+qda.class
+
+#CONFUSION TABLES:
+#KNN 
+table(knn.5.pred,test.iris$variety)
+table(knn.10.pred,test.iris$variety)
+# LDA 
+table(iris$variety, lda.class)
+# QDA 
+table(iris$variety, qda.class)
+
+#MISSCLASSIFICAITON RATES:
+#KNN 5 missclassification rate = 22.67%
+mean(knn.5.pred!= test.iris$variety)
+# KNN 10 missclassification rate = 21.33%
+mean(knn.10.pred!= test.iris$variety)
+# LDA missclassification rate = 61.33%
+mean(lda.class!= test.iris$variety)
+# QDA missclassification rate = 62.67%
+mean(qda.class!= test.iris$variety)
+```
+(d)  Which of the models found in (c) seems to perform best?
+```{r}
+#BASED ON MISSCLASSIFICATION RATES:
+#The KNN model at K=10 had the lowest missclassification rate, 21.33%, which means that the model was the best at estimating the variable variety using sepal.length and sepal.width as predictors
+```
+
+(e)  Why do we avoid using logistic regression on a classification problem like this one?  
+```{r}
+#Because this problem has more than 2 classifications. Logistic regressions work best with continous values, and classification problems have discrete values. 
+#LDA and QDA are more stable than logistic regressions when Y has classes that are well separated.
+
+```
+
+## Problem 2
+
+The file `tumor.csv` was created from data compiled in the mid 1990s.  Each record was generated from a digitized image of a fine needle aspirate (FNA) of a breast mass.  They describe characteristics of the cell nuclei present in the image.  It is of interest to classify the mass as benign (non-cancerous) or malignant (cancerous) based on a number of features which describe the mass. The columns of the dataset are as follows:
+
+ > `Diagnosis` (Benign or Malignant)  
+ > `Radius` (mean of distances from center to points on the perimeter)  
+ > `Texture` (standard deviation of gray-scale values)  
+ > `Perimeter`  
+ > `Area`  
+ > `Smoothness` (local variation in radius lengths)  
+ > `Compactness` ($perimeter^2/area - 1.0$)  
+ > `Concavity` (severity of concave portions of the contour)  
+ > `Concave.Points` (number of concave portions of the contour)  
+ > `Symmetry`  
+ > `Fractal.Dimension` ("coastline approximation" - 1)
+ 
+ (a) Explore the data.
+```{r}
+tumor=read.csv("tumor.csv")
+summary(tumor)
+
+#Turn Diagnosis into a factor varible
+tumor$Diagnosis=as.factor(tumor$Diagnosis)
+is.factor(tumor$Diagnosis)
+
+#pairwise scatterplot matrix, colored by Diagnosis.
+pairs(tumor, col=tumor$Diagnosis)
+
+#I see correlation between radius and perimeter, radius and area, and perimeter and area. 
+#I figure they are highly correlated because all those variable are a factor in the measuring of the size of the tumor. 
+
+#select predictors for Diagnosis, avoiding highly correlated variables:
+cor(tumor[2:11])
+# I will select Radius, Compactness, and Concave.Points as predictors of Diagnosis
+
+#CLASSIFICATION METHOD CHOSEN:
+#I will use a logistic regression to predict the diagnosis varibale, since it only has 2 classifications, and it has a large n. 
+```
+
+(b)  Split the data into an 80% training and 20% test set, being sure to set a seed of 1 for consistency. 
+```{r}
+set.seed(1)
+
+#split data:
+TestRows=sample(1:nrow(tumor),.20*nrow(tumor))
+
+#test and train sets:
+test.tumor = tumor[TestRows,]
+train.tumor = tumor[-TestRows,]
+
+#dimensions:
+dim(test.tumor)
+dim(train.tumor)
+```
+
+(c)  Using the training data, fit a logistic regression model predicting the probability of a malignant tumor.  Produce a summary of the model.  Which of the selected feature variables are significant? 
+```{r}
+#fit a logistic model:
+glm.fit=glm(Diagnosis ~ Radius + Compactness + Concave.Points, data=tumor, family=binomial)
+
+#summary of model:
+summary(glm.fit)
+
+#The variables Radius and Concave.Points are statistically significant, their p-values are smaller than 0.05
+```
+
+(d)  Produce a confusion matrix for the test data, using a probability threshold of 0.5 for classifying a tumor as Malignant.  What is the total misclassification rate? 
+```{r}
+#find predictions
+glm.probs=predict(glm.fit,type="response")
+glm.pred=rep("Benign",569)
+glm.pred[glm.probs >.5]="Malignant"
+
+#confusion matrix:
+table(tumor$Diagnosis, glm.pred)
+(336+184)/569
+#the model predicted 91.39% of the variable Diagnosis correctly
+
+#misclassification rate = 8.61%
+mean(glm.pred!=tumor$Diagnosis)
+```
+
+*Note:  In this week's R Tutorial video, the classifications for the logistic regression were 0 and 1.  In this data, the classifications will be Benign and Malignant.  If you plan to use the code in the tutorial as a guide, you'll need to replace the 0 with "Benign" and the 1 with "Malignant" (including the quotation marks).*
+
+(e)  If a tumor is truly malignant, the cost of an initial misclassification is very high (the patient may miss treatment because the test result mistakenly classified the tumor as benign).  If the tumor is truly benign, the cost of an initial misclassification is not so severe because further testing would discover the truth.  Discuss the false negative and false positive rate for the test set predictions within this context.
+
+```{r}
+#Missclasifying a malignant tumor as benign is a false positive in this case. 
+#false positive rate here = 5.88%. 
+#False positives are more problematic than the 13.21% false negative rate, because the cases that are false positives for benign are significantly more costly. We should minimize this. 
+FPR = 21/(336+21)
+FPR
+
+#Missclasifying a benign tumor as malignant is a false negative in this case. 
+#false negative rate = 13.21. 
+#measure of accuracy is not as important because the relative cost of incorrectly diagnosing a benign tumor as malignant is not higher. 
+FNR=28/(28+184)
+FNR
+```
+
+
+(f)  Produce a confusion matrix for the test data again, this time using a probability threshold of 0.3 for classifying a tumor as malignant.  How does this affect the misclassification rate and the false negative/positive rates?
+```{r}
+
+#find predictions
+glm.probs2=predict(glm.fit,type="response")
+glm.pred2=rep("Benign",569)
+glm.pred2[glm.probs2 >.3]="Malignant"
+
+#produce a confusion matrix -> the model predicted 62.74% of the diagnoses currectly.
+table(tumor$Diagnosis, glm.pred2)
+(327+30)/569
+
+
+#misclassification rate = 8.08%
+mean(glm.pred2!=tumor$Diagnosis)
+
+#Tightening probability threshold from 0.5 to 0.3 decreased the misclassification rate from 8.6% to 8.1%
+
+#The false positive rate increased from 5.88% to 8.4%. 
+FPR1 = 30/(327+30)
+FPR1
+
+#false negate rate decreased from 13.21% to 7.55%. 
+FNR1=16/(16+196)
+FNR1
+
+#model would increase costs of incorrectly diagnosing, despite an overall decrease in the misclassification rate.
+```
+
+(g)  Perform LDA and KNN (using k=10) on the training data using the same variables.  What are the test misclassification rates?  Which of the three models (Logistic, LDA, KNN) has the lowest overall misclassification rate?
+```{r}
+
+#LDA:
+library(MASS)
+
+lda.fit1=lda(Diagnosis ~ Radius + Compactness +Concave.Points, data=tumor)
+lda.pred1=predict(lda.fit1, tumor)
+lda.class1=lda.pred1$class
+
+#KNN
+library(class)
+knn.pred1 = knn(train.tumor[,c(2,7.9)],test.tumor[,c(2,7.9)],train.tumor[,1], k=10)
+
+# LM missclassification rate = 8.6%
+mean(glm.pred!=tumor$Diagnosis)
+
+# LDA missclassification rate = 43.76%
+mean(lda.class1!= test.tumor$Diagnosis)
+
+# KNN 10 missclassification rate = 9.73%
+mean(knn.pred1!= test.tumor$Diagnosis)
+
+#Logistic Model has lowest misclassification rate.
+```
+
+(h)  A researcher wishes to use a model with good predictive capability as well as one which provides insight into the relationship between the tumor characteristics and the diagnosis.  Which of the three models would you recommend?  Explain.
+```{r}
+#I would recommend that the use of an LDA or QDA model
+#These models showcase the relationship between tumor characteristics and the diagnosis 
+#they are also more flexible than a Logistic Regression
+```
