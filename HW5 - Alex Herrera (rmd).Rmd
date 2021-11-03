@@ -1,0 +1,211 @@
+---
+title: "Homework 5"
+author: "STAT 4510/7510"
+date: "Due Tuesday, Oct 5, 11:59 pm"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Instructions:**  Please list your name and student number clearly.  In order to receive credit for a problem, your solution must show sufficient detail so that the grader can determine how you obtained your answer.
+
+Submit a single pdf generated using R Markdown.  All R code should be included, as well as all output produced.  Upload your work to the Canvas course site.
+
+## Problem 1
+
+In this problem, we will once again consider the data found in `tumor.csv` from Homework 4.  
+    
+(a)  Filter the dataset to contain only the columns `Diagnosis`, `Radius`, `Texture`, `Smoothness`, `Concavity`, and `Fractal.Dimension`.  Remember to change `Diagnosis` to a factor variable. 
+```{r}
+tumor=read.csv("tumor.csv")
+#View(tumor)
+#summary(tumor)
+tumor$Diagnosis=as.factor(tumor$Diagnosis)
+#summary(tumor)
+tumor=tumor[,c(1,2,3,6,8,11)]
+summary(tumor)
+```
+
+
+(b)  Conduct 5-fold cross-validation to select the best method between logistic regression (with a probability cutoff of 0.5), LDA, and QDA for classifying `Diagnosis` using all other predictors from (a).  Which method is best?
+```{r}
+
+library(MASS)
+set.seed(1)
+
+folds = sample(1:5, nrow(tumor), replace = T)
+
+cv5.errors = matrix(0, nrow=5, ncol=3)
+colnames(cv5.errors) <- c("Logistic", "LDA", "QDA")
+
+for (f in 1:5){
+  cv.test = tumor[folds == f, ]
+  cv.train = tumor[folds != f, ]
+  #Logistic regression
+    glm.fit = glm(Diagnosis ~ ., data=cv.train, family=binomial)
+  glm.probs = predict(glm.fit, cv.test, type="response")
+  glm.pred = rep("Benign", nrow(cv.test))
+  glm.pred[glm.probs>0.5] = "Malignant"
+  cv5.errors[f, 1] = mean(cv.test$Diagnosis != glm.pred)
+  #LDA
+  lda.fit = lda(Diagnosis ~ ., data=cv.train)
+  lda.pred = predict(lda.fit, cv.test)$class
+  cv5.errors[f, 2] = mean(cv.test$Diagnosis != lda.pred)
+  #QDA
+  qda.fit = qda(Diagnosis ~ ., data=cv.train)
+  qda.pred = predict(qda.fit, cv.test)$class
+  cv5.errors[f, 3] = mean(cv.test$Diagnosis != qda.pred)
+}
+
+print(cv5.errors)
+```
+```{r}
+cv5.overall = colMeans(cv5.errors)
+cv5.overall
+```
+```{r}
+#QDA model has the lowest missclassification rate at 5.31%
+```
+
+
+(c)  Now, conduct 5-fold cross-validation for KNN using $k=1$ to $k=100$ nearest neighbors. Plot the mean misclassification rate over the five folds for each value of $k$. What is the best value of $k$ to use? 
+```{r}
+library(class)
+set.seed(1)
+
+folds = sample(1:5, nrow(tumor), replace = T)
+
+cv5.knn = matrix(0, nrow=5, ncol=100)
+
+for(f in 1:5){
+  cv.test = tumor[folds == f, ]
+  cv.train = tumor[folds != f, ]
+  for(k in 1:100){
+    knn.pred = knn(cv.train[ ,-1],cv.test[ ,-1], cv.train$Diagnosis, k)
+    cv5.knn[f,k] = mean(cv.test$Diagnosis != knn.pred)
+  }
+}
+
+cv5.knn.overall = colMeans(cv5.knn)
+cv5.knn.overall
+```
+```{r}
+plot(cv5.knn.overall,xlab='k',ylab='misclassification rate')
+```
+```{r}
+which.min(cv5.knn.overall)
+```
+```{r}
+cv5.knn.overall[which.min(cv5.knn.overall)]
+```
+```{r}
+#Optimal value is k=27, with a missclassification rate of 10.03%
+```
+
+(d)  Comparing the results from parts (b) and (c), which method provides the best results for classification?
+```{r}
+#QDA is the best method for classification
+```
+
+## Problem 2
+
+The file `HW5data.csv` contains a dataframe of $(x,y)$ data.  
+
+(a)  Make a plot of $y$ vs. $x$ and comment on the type of relationship you observe.  Does it appear to be linear?  Quadratic?  Something else?
+```{r}
+hw5 = read.csv("HW5data.csv")
+plot(hw5)
+
+```
+
+
+*Note - for part (b) you will fit polynomial models.  See a note posted on the Module 5 Discussion board related to different methods for fitting this model.*
+
+(b)  Use LOOCV to fit a regression model with polynomial degrees ranging from degree 1 to degree 8.  _(If you use the_ `cv.glm()` _function, be sure to load the_ `boot` _library.)_  Plot the CV errors vs the degree of the polynomial.  Which degree polynomial do you think fits best?
+```{r}
+library(boot)
+set.seed(1)
+
+cv.error=rep(0,8)
+
+for (i in 1:8){
+  glm.fit = glm(y~poly(x,i,raw=T), data=hw5)
+  cv.error[i] = cv.glm(hw5, glm.fit)$delta[1]
+}
+
+plot(cv.error,type="b", xlab="degree",ylab="MSE")
+
+```
+
+```{r}
+# This plot took a while to execute
+# 4-degrees looks like the best one (MSE is lowest)
+#not much improvement adding more than 4 degrees
+```
+
+(c)  Repeat part (b), using 10-fold cross-validation. Add the plot of the CV errors to the plot you made in part (b), using a different color.  Which degree polynomial do you think fits best?  Is it different from the result in part (b)?  Which approach (LOOCV vs 10-fold CV) took longer to execute in R?
+```{r}
+set.seed(1)
+
+cv.error10=rep(0,8)
+
+for (i in 1:8){
+  glm.fit = glm(y~poly(x,i,raw=T), data=hw5)
+  cv.error10[i] = cv.glm(hw5, glm.fit, K=10)$delta[1]
+}
+
+plot(cv.error,type="b", xlab="degree",ylab="MSE")
+lines(cv.error10,type="b", col="blue")
+
+```
+```{r}
+#I would stick with the 4-degree polynomial
+#test MSE values look very similar to the ones found through the LOOCV
+#10-fold CV executed way faster, why?
+```
+
+(d)  Produce the scatterplot from part (a) again, and add to it the regression polynomial you selected from part (c).  Does it appear to be a good fit?
+```{r}
+plot(y~x, data=hw5, col="black")
+
+glmpoly.fit = glm(y~poly(x,4),data=hw5)
+predx = sort(hw5$x)
+predy = predict(glmpoly.fit, newdata =list(x=predx), type="response")
+
+lines(predx,predy,col="blue")
+
+```
+```{r}
+#It does appear to be a good fit.
+```
+
+
+(e)  Assume that the degree of the model you chose in part (c) is the actual degree of the polynomial that describes the data.  Conduct a bootstrap analysis to estimate the coefficient parameters and their standard errors for this model.  Based on these values, give a 95\% confidence interval for $\beta_1$, the coefficient of $x$ in the model.  _(Hint:  You can approximate a 95\% confidence interval using the formula_ $\hat{\beta}_1 \pm 2SE(\hat{\beta}_1)$.)
+```{r}
+set.seed(1)
+
+boot.fn = function(data,index){
+  return(coef(glm(y~poly(x,4,raw=T), data=data,subset=index)))
+}
+
+boot.results = boot(hw5,boot.fn, 1000)
+boot.results
+```
+```{r}
+names(boot.results)
+```
+```{r}
+lower = boot.results$t0[2] - 2*sd(boot.results$t[,2])
+upper = boot.results$t0[2] + 2*sd(boot.results$t[,2])
+c(lower, upper)
+```
+ 
+```{r}
+# 95% confidence interval = (4.44, 5.88)
+```
+ 
+ 
