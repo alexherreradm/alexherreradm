@@ -1,3 +1,6 @@
+# This program will calculate the volume of a cylinder
+# It will prompt the user to input radius and height of cylinder
+
 import math
 
 while (True):
